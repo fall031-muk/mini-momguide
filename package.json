@@ -11,10 +11,11 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint 'src/**/*.ts'",
     "format": "prettier --write 'src/**/*.ts'",
-    "db:up": "docker compose up -d mysql redis elasticsearch",
+    "db:up": "docker compose up -d mysql redis elasticsearch kibana",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "es:reindex": "tsx src/scripts/reindex-products.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.15.0",

@@ -5,6 +5,7 @@ import { errorHandler } from './middleware/error-handler.js';
 import { categoryRouter } from './modules/categories/category.route.js';
 import { productRouter } from './modules/products/product.route.js';
 import { brandRouter } from './modules/brands/brand.route.js';
+import { searchRouter } from './modules/search/search.route.js';
 
 export function createApp() {
   const app = express();
@@ -19,6 +20,7 @@ export function createApp() {
   app.use('/api/categories', categoryRouter);
   app.use('/api/products', productRouter);
   app.use('/api/brands', brandRouter);
+  app.use('/api/search', searchRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Not Found' });

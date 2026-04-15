@@ -2,14 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/async-handler.js';
 import { HttpError } from '../../middleware/error-handler.js';
-import { Brand } from '../../db/models/brand.js';
+import { listBrands, createBrand } from './brand.service.js';
 
 const router = Router();
 
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    const brands = await Brand.findAll({ order: [['name', 'ASC']] });
+    const brands = await listBrands();
     res.json({ success: true, data: brands });
   }),
 );
@@ -26,7 +26,7 @@ router.post(
     if (!parsed.success) {
       throw new HttpError(400, 'Invalid input', parsed.error.flatten());
     }
-    const brand = await Brand.create(parsed.data);
+    const brand = await createBrand(parsed.data);
     res.status(201).json({ success: true, data: brand });
   }),
 );
