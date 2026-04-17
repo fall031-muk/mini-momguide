@@ -18,6 +18,8 @@
     "es:reindex": "tsx src/scripts/reindex-products.ts"
   },
   "dependencies": {
+    "@bull-board/api": "^7.0.0",
+    "@bull-board/express": "^7.0.0",
     "@elastic/elasticsearch": "^8.15.0",
     "bullmq": "^5.12.0",
     "dotenv": "^16.4.5",

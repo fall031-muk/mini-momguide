@@ -6,6 +6,7 @@ import { categoryRouter } from './modules/categories/category.route.js';
 import { productRouter } from './modules/products/product.route.js';
 import { brandRouter } from './modules/brands/brand.route.js';
 import { searchRouter } from './modules/search/search.route.js';
+import { createBullBoardRouter } from './queue/bull-board.js';
 
 export function createApp() {
   const app = express();
@@ -21,6 +22,7 @@ export function createApp() {
   app.use('/api/products', productRouter);
   app.use('/api/brands', brandRouter);
   app.use('/api/search', searchRouter);
+  app.use('/admin/queues', createBullBoardRouter());
 
   app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Not Found' });

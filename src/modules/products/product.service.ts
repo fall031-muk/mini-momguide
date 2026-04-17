@@ -7,6 +7,7 @@ import { HttpError } from '../../middleware/error-handler.js';
 import { redis } from '../../config/redis.js';
 import { cacheKeys } from '../../common/cache-keys.js';
 import { toProductListItem, toProductDetail } from './product.dto.js';
+import { enqueueProductIndex } from '../../queue/product-indexer.queue.js';
 
 type ListParams = {
   categoryId?: number;
@@ -81,5 +82,7 @@ export async function createProduct(input: {
   price?: number;
   priceUnit?: string;
 }) {
-  return Product.create(input);
+  const product = await Product.create(input);
+  await enqueueProductIndex(product.id);
+  return product;
 }

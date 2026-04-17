@@ -3,6 +3,7 @@ import { Product } from '../../db/models/product.js';
 import { Review } from '../../db/models/review.js';
 import { User } from '../../db/models/user.js';
 import { HttpError } from '../../middleware/error-handler.js';
+import { enqueueProductIndex } from '../../queue/product-indexer.queue.js';
 
 type CreateReviewInput = {
   userId: number;
@@ -12,7 +13,7 @@ type CreateReviewInput = {
 };
 
 export async function createReview(input: CreateReviewInput) {
-  return sequelize.transaction(async (tx) => {
+  const review = await sequelize.transaction(async (tx) => {
     const product = await Product.findByPk(input.productId, {
       transaction: tx,
       lock: tx.LOCK.UPDATE,
@@ -44,6 +45,9 @@ export async function createReview(input: CreateReviewInput) {
 
     return review;
   });
+
+  await enqueueProductIndex(input.productId);
+  return review;
 }
 
 type ListParams = {
