@@ -6,6 +6,10 @@ import { setupAssociations } from './db/associations.js';
 import { connectRedis, redis } from './config/redis.js';
 import { startProductIndexerWorker } from './queue/product-indexer.worker.js';
 import { productIndexerQueue } from './queue/product-indexer.queue.js';
+import { startViewsFlushWorker } from './queue/views-flush.worker.js';
+import { viewsFlushQueue, registerViewsFlushSchedule } from './queue/views-flush.queue.js';
+import { startDailyRankingWorker } from './queue/daily-ranking.worker.js';
+import { dailyRankingQueue, registerDailyRankingSchedule } from './queue/daily-ranking.queue.js';
 import { queueConnection } from './queue/connection.js';
 
 async function bootstrap() {
@@ -13,8 +17,12 @@ async function bootstrap() {
   await connectDb();
   await connectRedis();
 
-  const worker = startProductIndexerWorker();
-  logger.info('🛠️  Product indexer worker started');
+  const indexerWorker = startProductIndexerWorker();
+  const viewsWorker = startViewsFlushWorker();
+  const rankingWorker = startDailyRankingWorker();
+  await registerViewsFlushSchedule();
+  await registerDailyRankingSchedule();
+  logger.info('🛠️  Workers started (indexer, views-flush, daily-ranking)');
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {
@@ -24,8 +32,12 @@ async function bootstrap() {
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down...`);
     server.close(async () => {
-      await worker.close();
+      await indexerWorker.close();
+      await viewsWorker.close();
+      await rankingWorker.close();
       await productIndexerQueue.close();
+      await viewsFlushQueue.close();
+      await dailyRankingQueue.close();
       queueConnection.disconnect();
       await sequelize.close();
       redis.disconnect();

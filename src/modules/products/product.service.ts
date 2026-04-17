@@ -8,6 +8,7 @@ import { redis } from '../../config/redis.js';
 import { cacheKeys } from '../../common/cache-keys.js';
 import { toProductListItem, toProductDetail } from './product.dto.js';
 import { enqueueProductIndex } from '../../queue/product-indexer.queue.js';
+import { logger } from '../../common/logger.js';
 
 type ListParams = {
   categoryId?: number;
@@ -83,6 +84,8 @@ export async function createProduct(input: {
   priceUnit?: string;
 }) {
   const product = await Product.create(input);
-  await enqueueProductIndex(product.id);
+  await enqueueProductIndex(product.id).catch((err) => {
+    logger.error({ err, productId: product.id }, 'Failed to enqueue product index');
+  });
   return product;
 }

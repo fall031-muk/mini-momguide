@@ -29,6 +29,8 @@ export class Product extends Model<
   declare scoreCnt: CreationOptional<number>;
   declare productGrade: CreationOptional<ProductGrade | null>;
   declare ingredientGrade: CreationOptional<IngredientOverallGrade | null>;
+  declare rank: CreationOptional<number | null>;
+  declare rankDiff: CreationOptional<number>;
   declare isDiscontinued: CreationOptional<boolean>;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
@@ -56,6 +58,8 @@ Product.init(
     scoreCnt: { type: DataTypes.INTEGER.UNSIGNED, defaultValue: 0 },
     productGrade: { type: DataTypes.ENUM('A', 'B', 'C', 'D', 'X'), allowNull: true },
     ingredientGrade: { type: DataTypes.ENUM('O', '△', 'X'), allowNull: true },
+    rank: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
+    rankDiff: { type: DataTypes.INTEGER, defaultValue: 0 },
     isDiscontinued: { type: DataTypes.BOOLEAN, defaultValue: false },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE,

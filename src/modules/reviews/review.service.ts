@@ -4,6 +4,7 @@ import { Review } from '../../db/models/review.js';
 import { User } from '../../db/models/user.js';
 import { HttpError } from '../../middleware/error-handler.js';
 import { enqueueProductIndex } from '../../queue/product-indexer.queue.js';
+import { logger } from '../../common/logger.js';
 
 type CreateReviewInput = {
   userId: number;
@@ -46,7 +47,9 @@ export async function createReview(input: CreateReviewInput) {
     return review;
   });
 
-  await enqueueProductIndex(input.productId);
+  await enqueueProductIndex(input.productId).catch((err) => {
+    logger.error({ err, productId: input.productId }, 'Failed to enqueue product index');
+  });
   return review;
 }
 
