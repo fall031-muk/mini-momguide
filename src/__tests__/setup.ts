@@ -8,6 +8,9 @@ import { Ingredient } from '../db/models/ingredient.js';
 import { ProductIngredient } from '../db/models/product-ingredient.js';
 import { User } from '../db/models/user.js';
 import { Review } from '../db/models/review.js';
+import { Order } from '../db/models/order.js';
+import { OrderItem } from '../db/models/order-item.js';
+import { Payment } from '../db/models/payment.js';
 
 export let seedData: {
   brands: { motherK: Brand; mybee: Brand; bnb: Brand };
@@ -25,8 +28,14 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await Payment.destroy({ where: {} });
+  await OrderItem.destroy({ where: {} });
+  await Order.destroy({ where: {} });
   await Review.destroy({ where: {} });
-  await Product.update({ scoreSum: 0, scoreCnt: 0, rank: null, rankDiff: 0 }, { where: {} });
+  await Product.update(
+    { scoreSum: 0, scoreCnt: 0, rank: null, rankDiff: 0, stock: 100 },
+    { where: {} },
+  );
 });
 
 afterAll(async () => {
@@ -56,14 +65,17 @@ async function insertSeedData() {
 
   const soap1 = await Product.create({
     name: '디아 세탁비누', brandId: motherK.id, categoryId: soap.id,
+    price: 7430, stock: 100,
     views: 24074, scoreSum: 757, scoreCnt: 162, productGrade: 'B', ingredientGrade: 'O',
   });
   const cleaner = await Product.create({
     name: '마이비 얼룩제거제', brandId: mybee.id, categoryId: soap.id,
+    price: 12000, stock: 100,
     views: 31264, scoreSum: 1062, scoreCnt: 235, productGrade: 'X', ingredientGrade: 'O',
   });
   const soap2 = await Product.create({
     name: '비앤비 세탁비누', brandId: bnb.id, categoryId: soap.id,
+    price: 5500, stock: 100,
     views: 10956, scoreSum: 345, scoreCnt: 79, productGrade: 'A', ingredientGrade: 'O',
   });
 

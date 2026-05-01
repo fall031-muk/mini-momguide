@@ -6,6 +6,9 @@ import { categoryRouter } from './modules/categories/category.route.js';
 import { productRouter } from './modules/products/product.route.js';
 import { brandRouter } from './modules/brands/brand.route.js';
 import { searchRouter } from './modules/search/search.route.js';
+import { authRouter } from './modules/auth/auth.route.js';
+import { orderRouter } from './modules/orders/order.route.js';
+import { paymentRouter } from './modules/payments/payment.route.js';
 import { createBullBoardRouter } from './queue/bull-board.js';
 
 export function createApp() {
@@ -18,10 +21,13 @@ export function createApp() {
     res.json({ status: 'ok', uptime: process.uptime() });
   });
 
+  app.use('/api/auth', authRouter);
   app.use('/api/categories', categoryRouter);
   app.use('/api/products', productRouter);
   app.use('/api/brands', brandRouter);
   app.use('/api/search', searchRouter);
+  app.use('/api/orders', orderRouter);
+  app.use('/api/payments', paymentRouter);
   app.use('/admin/queues', createBullBoardRouter());
 
   app.use((_req, res) => {

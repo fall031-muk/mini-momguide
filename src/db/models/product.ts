@@ -24,6 +24,7 @@ export class Product extends Model<
   declare imgUrl: CreationOptional<string | null>;
   declare price: CreationOptional<number | null>;
   declare priceUnit: CreationOptional<string | null>;
+  declare stock: CreationOptional<number>;
   declare views: CreationOptional<number>;
   declare scoreSum: CreationOptional<number>;
   declare scoreCnt: CreationOptional<number>;
@@ -53,6 +54,7 @@ Product.init(
     imgUrl: { type: DataTypes.STRING(500), allowNull: true },
     price: { type: DataTypes.INTEGER, allowNull: true },
     priceUnit: { type: DataTypes.STRING(100), allowNull: true },
+    stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
     views: { type: DataTypes.INTEGER.UNSIGNED, defaultValue: 0 },
     scoreSum: { type: DataTypes.DECIMAL(10, 1), defaultValue: 0 },
     scoreCnt: { type: DataTypes.INTEGER.UNSIGNED, defaultValue: 0 },

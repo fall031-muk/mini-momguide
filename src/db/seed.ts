@@ -56,6 +56,7 @@ async function seed() {
   const p1 = await Product.create({
     name: '디아 세탁비누 베르가못향', brandId: motherK.id, categoryId: laundrySoap.id,
     imgUrl: 'https://example.com/p1.png', price: 7430, priceUnit: '150g × 3개',
+    stock: 50,
     views: 24074, scoreSum: 757, scoreCnt: 162,
     productGrade: 'B', ingredientGrade: 'O',
   });
@@ -69,6 +70,7 @@ async function seed() {
   const p2 = await Product.create({
     name: '마이비 얼룩제거제(리뉴얼)', brandId: mybee.id, categoryId: liquidSoap.id,
     price: 12000, priceUnit: '500ml',
+    stock: 30,
     views: 31264, scoreSum: 1062.5, scoreCnt: 235,
     productGrade: 'X', ingredientGrade: '△',
   });
@@ -81,6 +83,7 @@ async function seed() {
   const p3 = await Product.create({
     name: '비앤비 세탁비누 카모마일', brandId: bnb.id, categoryId: laundrySoap.id,
     price: 5500, priceUnit: '200g × 2개',
+    stock: 100,
     views: 10956, scoreSum: 345.5, scoreCnt: 79,
     productGrade: 'A', ingredientGrade: 'O',
   });

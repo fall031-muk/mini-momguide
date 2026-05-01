@@ -16,6 +16,7 @@
 | Infra | Docker Compose (MySQL, Redis, ES, Kibana) |
 | Logging | Pino |
 | Validation | Zod |
+| Auth | JWT (jsonwebtoken) + bcrypt |
 
 ## 아키텍처
 
@@ -126,6 +127,30 @@
 | GET | `/api/products/:id/reviews` | 리뷰 목록 |
 | POST | `/api/products/:id/reviews` | 리뷰 작성 → 평점 집계 + ES 재색인 |
 
+### Auth API
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/api/auth/signup` | 회원가입 → JWT 발급 |
+| POST | `/api/auth/login` | 로그인 → JWT 발급 |
+
+요청 body: `{ email, password, nickname }` (signup) / `{ email, password }` (login)
+응답에 `token` 포함. 이후 API는 `Authorization: Bearer <token>` 헤더 사용.
+
+### Order / Payment API (인증 필요)
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/api/orders` | 주문 생성 (트랜잭션 + 원자적 재고 차감, status=PENDING) |
+| GET | `/api/orders/:id` | 본인 주문 조회 |
+| POST | `/api/payments/confirm` | Mock PG 호출 → 결제 승인 → status=PAID |
+
+**결제 플로우**:
+1. `POST /api/orders` `{ items: [{ productId, quantity }] }` → `orderUid`, `totalAmount` 응답
+2. (실서비스라면 클라가 PG SDK로 결제창 띄움 — 여기선 mock paymentKey 사용)
+3. `POST /api/payments/confirm` `{ orderUid, paymentKey, amount }`
+   - `mock_ok_*` → 승인 / `mock_fail_*` → 거절 / `mock_amount_*` → 응답 금액 불일치
+
 ### Search API (Elasticsearch)
 
 | Method | Path | 설명 |
@@ -181,6 +206,23 @@
 ### 검색: nori + nested ingredients
 - 한글 형태소 분석기 nori의 `decompound_mode: mixed`로 복합어(세탁비누 → 세탁+비누+세탁비누) 처리.
 - 성분을 nested 타입으로 색인해서 "특정 성분 포함/제외" 필터가 정확하게 동작.
+
+### 결제 동시성: Lock 대신 DB 제약 + 조건부 UPDATE
+3가지 race를 락 없이 막음:
+- **재고 차감**: `UPDATE products SET stock = stock - q WHERE id=? AND stock >= q` — affectedRows로 성공 여부 판정. 단일 row 갱신은 InnoDB row lock으로 직렬화되므로 SELECT FOR UPDATE 불필요.
+- **중복 결제**: `payments.order_id` UNIQUE + `pgPaymentKey` UNIQUE — 두 번째 INSERT는 DB가 거부 → catch해서 기존 결제 멱등 반환.
+- **상태 전이**: `UPDATE orders SET status='PAID' WHERE id=? AND status='PENDING'` — compare-and-swap. affectedRows=0이면 다른 요청이 이미 처리한 것.
+
+Redis 분산락이나 SELECT FOR UPDATE는 위 3종으로 커버 안 되는 시나리오에서만 도입 (예: 외부 API 호출을 락 안에 두고 싶을 때).
+
+### 결제 위변조 방어
+- 클라이언트가 보낸 amount는 신뢰 X — 서버에서 `order.totalAmount`와 비교 후 PG 호출
+- PG 응답 금액도 다시 비교 (PG 측 버그/공격 방어)
+- 주문 소유자(userId) 검증으로 타인 주문 결제 차단
+
+### PG 추상화: 인터페이스 분리
+- `PgClient` 인터페이스 + `MockPgClient` 구현. `setPgClient()`로 실제 PG로 교체 가능.
+- 테스트에서 mock paymentKey 규칙(`mock_ok_*` / `mock_fail_*` / `mock_amount_*`)으로 다양한 시나리오 재현.
 
 ### 큐 장애 대응: try/catch + daily catch-up
 - 큐 발행 실패를 삼키고 API 가용성 우선 확보.
@@ -257,13 +299,17 @@ mini-momguide/
 │   │                                 # ProductIngredient, User, Review
 │   ├── middleware/
 │   │   ├── async-handler.ts          # async 에러 자동 전파
+│   │   ├── auth.ts                   # requireAuth (Bearer JWT 검증)
 │   │   └── error-handler.ts          # HttpError + 글로벌 핸들러
 │   ├── modules/
+│   │   ├── auth/       (route, service)            # JWT signup/login
 │   │   ├── categories/ (route, service)
-│   │   ├── products/  (route, service, dto)
-│   │   ├── brands/    (route, service)
-│   │   ├── reviews/   (route, service)
-│   │   └── search/    (route, service)
+│   │   ├── products/   (route, service, dto)
+│   │   ├── brands/     (route, service)
+│   │   ├── reviews/    (route, service)
+│   │   ├── search/     (route, service)
+│   │   ├── orders/     (route, service)            # 주문 + 원자적 재고 차감
+│   │   └── payments/   (route, service, pg/)       # Mock PG client + confirm
 │   ├── search/
 │   │   ├── product-index.ts          # ES 인덱스 매핑 (nori, nested)
 │   │   └── indexer.service.ts        # bulk/단건 인덱싱

@@ -16,6 +16,9 @@ const EnvSchema = z.object({
   REDIS_PORT: z.coerce.number().default(6379),
 
   ES_NODE: z.string().url(),
+
+  JWT_SECRET: z.string().min(16).default('dev-secret-change-me-in-production'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

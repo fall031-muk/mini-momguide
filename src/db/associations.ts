@@ -5,6 +5,9 @@ import { Ingredient } from './models/ingredient.js';
 import { ProductIngredient } from './models/product-ingredient.js';
 import { User } from './models/user.js';
 import { Review } from './models/review.js';
+import { Order } from './models/order.js';
+import { OrderItem } from './models/order-item.js';
+import { Payment } from './models/payment.js';
 
 export function setupAssociations() {
   Category.hasMany(Category, { as: 'children', foreignKey: 'parentId' });
@@ -34,4 +37,16 @@ export function setupAssociations() {
 
   Product.hasMany(Review, { foreignKey: 'productId' });
   Review.belongsTo(Product, { foreignKey: 'productId' });
+
+  User.hasMany(Order, { foreignKey: 'userId' });
+  Order.belongsTo(User, { foreignKey: 'userId' });
+
+  Order.hasMany(OrderItem, { foreignKey: 'orderId', as: 'items' });
+  OrderItem.belongsTo(Order, { foreignKey: 'orderId' });
+
+  Product.hasMany(OrderItem, { foreignKey: 'productId' });
+  OrderItem.belongsTo(Product, { foreignKey: 'productId' });
+
+  Order.hasOne(Payment, { foreignKey: 'orderId', as: 'payment' });
+  Payment.belongsTo(Order, { foreignKey: 'orderId' });
 }
