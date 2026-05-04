@@ -22,7 +22,19 @@ export class PgError extends Error {
   }
 }
 
+export type PgCancelInput = {
+  paymentKey: string;
+  reason: string;
+};
+
+export type PgCancelResult = {
+  paymentKey: string;
+  cancelledAt: string;
+  raw: Record<string, unknown>;
+};
+
 export interface PgClient {
   readonly provider: string;
   confirm(input: PgConfirmInput): Promise<PgConfirmResult>;
+  cancel(input: PgCancelInput): Promise<PgCancelResult>;
 }

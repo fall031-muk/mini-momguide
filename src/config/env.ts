@@ -19,6 +19,8 @@ const EnvSchema = z.object({
 
   JWT_SECRET: z.string().min(16).default('dev-secret-change-me-in-production'),
   JWT_EXPIRES_IN: z.string().default('7d'),
+
+  PG_WEBHOOK_SECRET: z.string().min(8).default('dev-webhook-secret-change-me'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

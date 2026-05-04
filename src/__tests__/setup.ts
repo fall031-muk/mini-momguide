@@ -11,6 +11,7 @@ import { Review } from '../db/models/review.js';
 import { Order } from '../db/models/order.js';
 import { OrderItem } from '../db/models/order-item.js';
 import { Payment } from '../db/models/payment.js';
+import { IdempotencyKey } from '../db/models/idempotency-key.js';
 
 export let seedData: {
   brands: { motherK: Brand; mybee: Brand; bnb: Brand };
@@ -28,6 +29,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await IdempotencyKey.destroy({ where: {} });
   await Payment.destroy({ where: {} });
   await OrderItem.destroy({ where: {} });
   await Order.destroy({ where: {} });

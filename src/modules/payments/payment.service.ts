@@ -115,13 +115,80 @@ async function markOrderFailedAndRestock(orderId: number) {
       { where: { id: orderId, status: 'PENDING' }, transaction: tx },
     );
     if (affected !== 1) return;
-
-    const items = await OrderItem.findAll({ where: { orderId }, transaction: tx });
-    for (const item of items) {
-      await Product.update(
-        { stock: sequelize.literal(`stock + ${item.quantity}`) },
-        { where: { id: item.productId }, transaction: tx },
-      );
-    }
+    await restockOrderItems(orderId, tx);
   });
+}
+
+async function restockOrderItems(orderId: number, tx: import('sequelize').Transaction) {
+  const items = await OrderItem.findAll({ where: { orderId }, transaction: tx });
+  for (const item of items) {
+    await Product.update(
+      { stock: sequelize.literal(`stock + ${item.quantity}`) },
+      { where: { id: item.productId }, transaction: tx },
+    );
+  }
+}
+
+/**
+ * 환불 (전액 취소).
+ *  1. 주문 소유자 + status=PAID 검증
+ *  2. PG cancel 호출 (외부 호출 트랜잭션 밖)
+ *  3. 트랜잭션:
+ *     a. payments 조건부 UPDATE: status='PAID' → 'CANCELLED' (compare-and-swap)
+ *     b. orders 조건부 UPDATE: status='PAID' → 'CANCELLED'
+ *     c. 재고 복구
+ *  affected=0 이면 다른 요청이 이미 환불 처리한 것 → 멱등하게 현재 상태 반환.
+ */
+export async function refundPayment(input: {
+  userId: number;
+  paymentId: number;
+  reason: string;
+}) {
+  const payment = await Payment.findByPk(input.paymentId, { include: [Order] });
+  if (!payment) throw new HttpError(404, 'Payment not found');
+
+  const order = await Order.findByPk(payment.orderId);
+  if (!order) throw new HttpError(404, 'Order not found');
+  if (order.userId !== input.userId) {
+    throw new HttpError(403, 'You do not own this payment');
+  }
+
+  if (payment.status === 'CANCELLED') {
+    return { payment, order, alreadyCancelled: true };
+  }
+  if (payment.status !== 'PAID') {
+    throw new HttpError(409, `Cannot refund a payment in status ${payment.status}`);
+  }
+
+  try {
+    await getPgClient().cancel({
+      paymentKey: payment.pgPaymentKey,
+      reason: input.reason,
+    });
+  } catch (err) {
+    if (err instanceof PgError) {
+      throw new HttpError(502, `PG cancel failed: ${err.message}`);
+    }
+    throw err;
+  }
+
+  const wonRace = await sequelize.transaction(async (tx) => {
+    const [paymentAffected] = await Payment.update(
+      { status: 'CANCELLED' },
+      { where: { id: payment.id, status: 'PAID' }, transaction: tx },
+    );
+    if (paymentAffected !== 1) {
+      logger.warn({ paymentId: payment.id }, 'Refund race: payment already cancelled');
+      return false;
+    }
+    await Order.update(
+      { status: 'CANCELLED' },
+      { where: { id: order.id, status: 'PAID' }, transaction: tx },
+    );
+    await restockOrderItems(order.id, tx);
+    return true;
+  });
+
+  await Promise.all([payment.reload(), order.reload()]);
+  return { payment, order, alreadyCancelled: !wonRace };
 }

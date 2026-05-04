@@ -5,6 +5,8 @@ import { Order } from '../../db/models/order.js';
 import { OrderItem } from '../../db/models/order-item.js';
 import { Product } from '../../db/models/product.js';
 import { HttpError } from '../../middleware/error-handler.js';
+import { enqueueOrderTtl } from '../../queue/order-ttl.queue.js';
+import { logger } from '../../common/logger.js';
 
 export type CreateOrderInput = {
   userId: number;
@@ -82,6 +84,39 @@ export async function createOrder(input: CreateOrderInput) {
     );
 
     return order;
+  }).then(async (order) => {
+    // TTL 잡 등록은 트랜잭션 밖. 큐 발행 실패해도 API 가용성 우선.
+    await enqueueOrderTtl(order.id).catch((err) =>
+      logger.error({ err, orderId: order.id }, 'Failed to enqueue order TTL'),
+    );
+    return order;
+  });
+}
+
+/**
+ * TTL 워커가 호출. 주문이 여전히 PENDING이면 CANCELLED로 전이 + 재고 복구.
+ *  - 조건부 UPDATE: status='PENDING' → 'CANCELLED' 만 허용 (이미 PAID면 no-op)
+ *  - affected=0 이면 사용자가 그 사이 결제했거나 이미 취소됐다는 뜻
+ *
+ * 워커는 BullMQ retry로 안전하게 재시도되므로 멱등성 필수.
+ */
+export async function expirePendingOrder(orderId: number) {
+  return sequelize.transaction(async (tx) => {
+    const [affected] = await Order.update(
+      { status: 'CANCELLED' },
+      { where: { id: orderId, status: 'PENDING' }, transaction: tx },
+    );
+    if (affected !== 1) {
+      return { expired: false, reason: 'not_pending' as const };
+    }
+    const items = await OrderItem.findAll({ where: { orderId }, transaction: tx });
+    for (const item of items) {
+      await Product.update(
+        { stock: sequelize.literal(`stock + ${item.quantity}`) },
+        { where: { id: item.productId }, transaction: tx },
+      );
+    }
+    return { expired: true, restored: items.length };
   });
 }
 

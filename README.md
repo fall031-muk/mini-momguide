@@ -141,15 +141,25 @@
 
 | Method | Path | 설명 |
 |---|---|---|
-| POST | `/api/orders` | 주문 생성 (트랜잭션 + 원자적 재고 차감, status=PENDING) |
+| POST | `/api/orders` | 주문 생성 (트랜잭션 + 원자적 재고 차감, status=PENDING) — 30분 후 자동 만료 잡 등록 |
 | GET | `/api/orders/:id` | 본인 주문 조회 |
-| POST | `/api/payments/confirm` | Mock PG 호출 → 결제 승인 → status=PAID |
+| POST | `/api/payments/confirm` | Mock PG 호출 → 결제 승인 → status=PAID. `Idempotency-Key` 헤더 지원 |
+| POST | `/api/payments/:id/refund` | 환불. PG cancel → status=CANCELLED + 재고 복구. `Idempotency-Key` 지원 |
+| POST | `/api/payments/webhook` | PG 비동기 통지. HMAC-SHA256 서명 검증 (raw body) |
 
 **결제 플로우**:
 1. `POST /api/orders` `{ items: [{ productId, quantity }] }` → `orderUid`, `totalAmount` 응답
 2. (실서비스라면 클라가 PG SDK로 결제창 띄움 — 여기선 mock paymentKey 사용)
 3. `POST /api/payments/confirm` `{ orderUid, paymentKey, amount }`
    - `mock_ok_*` → 승인 / `mock_fail_*` → 거절 / `mock_amount_*` → 응답 금액 불일치
+4. (필요 시) `POST /api/payments/:id/refund` `{ reason }` → 환불
+   - `mock_cancel_fail_*` paymentKey면 PG가 취소 거절
+
+**Idempotency**: confirm/refund 요청에 `Idempotency-Key: <unique-string>` 헤더 추가 시, 같은 키로 재요청하면 첫 응답을 그대로 재생. 네트워크 재시도/새로고침 안전.
+
+**Webhook**: PG가 `POST /api/payments/webhook`에 `X-Signature: <hex>` 헤더와 함께 raw JSON body 전송. 서명은 `HMAC-SHA256(PG_WEBHOOK_SECRET, rawBody)`. body 1바이트만 변조해도 서명 검증 실패.
+
+**자동 만료**: 결제 안 된 PENDING 주문은 30분 후 BullMQ delayed job으로 자동 CANCELLED + 재고 복구.
 
 ### Search API (Elasticsearch)
 
@@ -182,6 +192,7 @@
 | `product-indexer` | 제품 생성/리뷰 작성 시 | MySQL에서 제품+성분 조회 → ES 색인 |
 | `views-flush` | 5분마다 (repeatable) | Redis 조회수 카운터 → DB INCREMENT → ES 재색인 |
 | `daily-ranking` | 매일 03:00 (cron) | views/score 기준 rank/rankDiff 재계산 → full reindex |
+| `order-ttl` | 주문 생성 시 (delay 30분) | PENDING 주문 자동 CANCELLED + 재고 복구 (멱등) |
 
 장애 대응: 큐 발행 실패 시 try/catch로 API 가용성 보호. 누락분은 daily reindex로 catch-up.
 
@@ -219,6 +230,25 @@ Redis 분산락이나 SELECT FOR UPDATE는 위 3종으로 커버 안 되는 시�
 - 클라이언트가 보낸 amount는 신뢰 X — 서버에서 `order.totalAmount`와 비교 후 PG 호출
 - PG 응답 금액도 다시 비교 (PG 측 버그/공격 방어)
 - 주문 소유자(userId) 검증으로 타인 주문 결제 차단
+
+### Idempotency-Key: 표 캐시 패턴
+- 헤더 `Idempotency-Key`를 받으면 `(userId, key, requestPath)` UNIQUE row 생성 시도
+- 첫 요청: status=`IN_FLIGHT` 기록 → 처리 후 status=`COMPLETED` + 응답 body 박제
+- 재요청: UniqueConstraintError catch → 박제된 응답 그대로 반환
+- IN_FLIGHT 상태 재요청은 409 (동시 재시도 차단)
+- Redis TTL 캐시 대신 DB 테이블 선택: 휘발성 없이 멱등성 보장 + 응답까지 정확히 같음
+
+### Webhook: HMAC + Raw Body + 멱등
+- PG가 `X-Signature: hex(hmac_sha256(secret, rawBody))` 헤더와 함께 통지
+- `express.raw()`로 raw bytes 보존 후 검증 (express.json 거치면 직렬화로 서명 깨짐)
+- `timingSafeEqual`로 사이드채널 차단
+- 같은 이벤트 재전송돼도 결과 동일: `payment.status` 검사 후 조건부 UPDATE
+
+### 주문 자동 만료: BullMQ delayed job
+- 주문 생성 시 `enqueueOrderTtl(orderId)` (delay 30분)
+- 워커가 fire되면 status=PENDING일 때만 CANCELLED + 재고 복구 (조건부 UPDATE로 멱등)
+- 사용자가 그 사이 결제하면 PAID로 바뀌어 워커는 no-op
+- BullMQ retry로 워커 자체도 재실행 안전
 
 ### PG 추상화: 인터페이스 분리
 - `PgClient` 인터페이스 + `MockPgClient` 구현. `setPgClient()`로 실제 PG로 교체 가능.
@@ -300,6 +330,7 @@ mini-momguide/
 │   ├── middleware/
 │   │   ├── async-handler.ts          # async 에러 자동 전파
 │   │   ├── auth.ts                   # requireAuth (Bearer JWT 검증)
+│   │   ├── idempotency.ts            # Idempotency-Key 헤더 처리
 │   │   └── error-handler.ts          # HttpError + 글로벌 핸들러
 │   ├── modules/
 │   │   ├── auth/       (route, service)            # JWT signup/login
@@ -308,8 +339,8 @@ mini-momguide/
 │   │   ├── brands/     (route, service)
 │   │   ├── reviews/    (route, service)
 │   │   ├── search/     (route, service)
-│   │   ├── orders/     (route, service)            # 주문 + 원자적 재고 차감
-│   │   └── payments/   (route, service, pg/)       # Mock PG client + confirm
+│   │   ├── orders/     (route, service)            # 주문 + 원자적 재고 차감 + TTL 잡 등록
+│   │   └── payments/   (route, service, webhook, pg/)  # confirm/refund/webhook + Mock PG
 │   ├── search/
 │   │   ├── product-index.ts          # ES 인덱스 매핑 (nori, nested)
 │   │   └── indexer.service.ts        # bulk/단건 인덱싱

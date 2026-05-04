@@ -8,6 +8,7 @@ import { Review } from './models/review.js';
 import { Order } from './models/order.js';
 import { OrderItem } from './models/order-item.js';
 import { Payment } from './models/payment.js';
+import './models/idempotency-key.js';
 
 export function setupAssociations() {
   Category.hasMany(Category, { as: 'children', foreignKey: 'parentId' });

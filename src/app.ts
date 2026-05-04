@@ -9,12 +9,17 @@ import { searchRouter } from './modules/search/search.route.js';
 import { authRouter } from './modules/auth/auth.route.js';
 import { orderRouter } from './modules/orders/order.route.js';
 import { paymentRouter } from './modules/payments/payment.route.js';
+import { webhookRouter } from './modules/payments/webhook.route.js';
 import { createBullBoardRouter } from './queue/bull-board.js';
 
 export function createApp() {
   const app = express();
 
   app.use(pinoHttp({ logger }));
+
+  // Webhook은 raw body 필수 (HMAC 서명 검증) — express.json 보다 먼저 마운트.
+  app.use('/api/payments/webhook', webhookRouter);
+
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', (_req, res) => {

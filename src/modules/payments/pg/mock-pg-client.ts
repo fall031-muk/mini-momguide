@@ -2,6 +2,8 @@ import type {
   PgClient,
   PgConfirmInput,
   PgConfirmResult,
+  PgCancelInput,
+  PgCancelResult,
 } from './pg-client.js';
 import { PgError } from './pg-client.js';
 
@@ -35,6 +37,27 @@ export class MockPgClient implements PgClient {
         totalAmount: responseAmount,
         method: 'CARD',
         approvedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  /**
+   * cancel:
+   *  - 'mock_cancel_fail_*' paymentKey면 PG가 취소 거절
+   *  - 그 외 정상 취소
+   */
+  async cancel(input: PgCancelInput): Promise<PgCancelResult> {
+    if (input.paymentKey.startsWith('mock_cancel_fail_')) {
+      throw new PgError('CANCEL_DECLINED', 'Mock PG declined the cancel');
+    }
+    const cancelledAt = new Date().toISOString();
+    return {
+      paymentKey: input.paymentKey,
+      cancelledAt,
+      raw: {
+        paymentKey: input.paymentKey,
+        cancelledAt,
+        reason: input.reason,
       },
     };
   }

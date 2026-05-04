@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('../queue/order-ttl.queue.js', () => ({
+  enqueueOrderTtl: vi.fn().mockResolvedValue(undefined),
+  orderTtlQueue: { add: vi.fn() },
+  ORDER_PENDING_TTL_MS: 1000,
+}));
+
 import { seedData } from './setup.js';
 import { createOrder } from '../modules/orders/order.service.js';
 import { Product } from '../db/models/product.js';

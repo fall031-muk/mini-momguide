@@ -10,6 +10,8 @@ import { startViewsFlushWorker } from './queue/views-flush.worker.js';
 import { viewsFlushQueue, registerViewsFlushSchedule } from './queue/views-flush.queue.js';
 import { startDailyRankingWorker } from './queue/daily-ranking.worker.js';
 import { dailyRankingQueue, registerDailyRankingSchedule } from './queue/daily-ranking.queue.js';
+import { startOrderTtlWorker } from './queue/order-ttl.worker.js';
+import { orderTtlQueue } from './queue/order-ttl.queue.js';
 import { queueConnection } from './queue/connection.js';
 
 async function bootstrap() {
@@ -20,9 +22,10 @@ async function bootstrap() {
   const indexerWorker = startProductIndexerWorker();
   const viewsWorker = startViewsFlushWorker();
   const rankingWorker = startDailyRankingWorker();
+  const orderTtlWorker = startOrderTtlWorker();
   await registerViewsFlushSchedule();
   await registerDailyRankingSchedule();
-  logger.info('🛠️  Workers started (indexer, views-flush, daily-ranking)');
+  logger.info('🛠️  Workers started (indexer, views-flush, daily-ranking, order-ttl)');
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {
@@ -35,9 +38,11 @@ async function bootstrap() {
       await indexerWorker.close();
       await viewsWorker.close();
       await rankingWorker.close();
+      await orderTtlWorker.close();
       await productIndexerQueue.close();
       await viewsFlushQueue.close();
       await dailyRankingQueue.close();
+      await orderTtlQueue.close();
       queueConnection.disconnect();
       await sequelize.close();
       redis.disconnect();

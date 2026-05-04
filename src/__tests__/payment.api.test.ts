@@ -17,6 +17,12 @@ vi.mock('../queue/daily-ranking.queue.js', () => ({
   dailyRankingQueue: { add: vi.fn() },
 }));
 
+vi.mock('../queue/order-ttl.queue.js', () => ({
+  enqueueOrderTtl: vi.fn().mockResolvedValue(undefined),
+  orderTtlQueue: { add: vi.fn() },
+  ORDER_PENDING_TTL_MS: 1000,
+}));
+
 vi.mock('../queue/bull-board.js', () => ({
   createBullBoardRouter: () => {
     const { Router } = require('express');
